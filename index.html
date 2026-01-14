@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pizza Slicer Pro</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Pizza Slicer Pro</h1>
+        
+        <div class="type-selector">
+            <button class="type-btn active" data-type="pizza"><i class="fas fa-pizza-slice"></i> Pizza</button>
+            <button class="type-btn" data-type="galette"><i class="fas fa-crown"></i> Galette</button>
+            <button class="type-btn" data-type="tarte"><i class="fas fa-strawberry"></i> Tarte</button>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="slices">
+                    Parts : <span id="sliceValue">7</span> 
+                    (<span id="cutCount">7</span> coupes)
+                </label>
+                <input type="range" id="slices" min="2" max="12" value="7" class="slider">
+            </div>
+        </div>
+
+        <div class="visualizer">
+            <canvas id="pizzaCanvas" width="500" height="500"></canvas>
+            <!-- Structure de la roulette améliorée -->
+            <div id="cutter" class="cutter">
+                <div class="cutter-handle"></div>
+                <div class="cutter-wheel"><i class="fas fa-cog"></i></div>
+            </div>
+        </div>
+        
+        <button id="cutBtn" class="action-btn">COUPER MAINTENANT</button>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

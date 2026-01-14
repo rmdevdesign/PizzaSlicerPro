@@ -7,6 +7,70 @@ const typeButtons = document.querySelectorAll('.type-btn');
 const cutter = document.getElementById('cutter');
 const cutBtn = document.getElementById('cutBtn');
 
+// --- I18N SYSTEM ---
+const translations = {
+    fr: {
+        pizza: "Pizza",
+        galette: "Galette",
+        tarte: "Tarte",
+        slices: "PARTS",
+        cuts: "COUPES",
+        cut_action: "COUPER",
+        reset_action: "RESET"
+    },
+    en: {
+        pizza: "Pizza",
+        galette: "Pie", // Galette des rois is specific, but Pie works generally
+        tarte: "Tart",
+        slices: "SLICES",
+        cuts: "CUTS",
+        cut_action: "SLICE IT",
+        reset_action: "RESET"
+    },
+    es: {
+        pizza: "Pizza",
+        galette: "Pastel",
+        tarte: "Tarta",
+        slices: "PORCIONES",
+        cuts: "CORTES",
+        cut_action: "CORTAR",
+        reset_action: "REINICIAR"
+    },
+    it: {
+        pizza: "Pizza",
+        galette: "Torta",
+        tarte: "Crostata",
+        slices: "FETTE",
+        cuts: "TAGLI",
+        cut_action: "TAGLIARE",
+        reset_action: "RESET"
+    },
+    de: {
+        pizza: "Pizza",
+        galette: "Kuchen",
+        tarte: "Torte",
+        slices: "STÜCKE",
+        cuts: "SCHNITTE",
+        cut_action: "SCHNEIDEN",
+        reset_action: "RESET"
+    }
+};
+
+// Detect Language
+const userLang = navigator.language || navigator.userLanguage; 
+const langCode = userLang.split('-')[0]; // 'fr-FR' -> 'fr'
+const currentLang = translations[langCode] ? langCode : 'en'; // Fallback to EN
+
+function applyTranslations() {
+    const t = translations[currentLang];
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (t[key]) el.textContent = t[key];
+    });
+}
+
+// --- END I18N ---
+
 // Canvas hors écran pour générer la texture globale une seule fois
 const textureCanvas = document.createElement('canvas');
 const textureCtx = textureCanvas.getContext('2d');
@@ -25,8 +89,8 @@ const types = {
         generator: generateGaletteTexture,
         shadow: '#d4af37',
         crumbColors: ['#d4af37', '#f5cba7', '#8b4513', '#ffd700'],
-        crumbDensity: 3, // Un peu plus dense pour compenser la petite taille
-        crumbSize: 1.2 // Beaucoup plus fin (était à 3)
+        crumbDensity: 3,
+        crumbSize: 1.2
     },
     tarte: {
         generator: generateTarteTexture,
@@ -41,6 +105,7 @@ let currentType = 'pizza';
 let isCut = false;
 let isAnimating = false;
 let crumbs = [];
+let explosionOffset = 0;
 
 function resizeCanvas() {
     const containerWidth = canvas.parentElement.clientWidth;
@@ -90,19 +155,19 @@ function draw() {
     drawCrumbs();
 
     const angleStep = (2 * Math.PI) / slices;
-    const explosionOffset = isCut ? 25 : 0;
+    const currentOffset = explosionOffset;
 
     for (let i = 0; i < slices; i++) {
         const startAngle = i * angleStep - Math.PI / 2;
         const endAngle = (i + 1) * angleStep - Math.PI / 2;
         const midAngle = startAngle + (endAngle - startAngle) / 2;
 
-        const offsetX = Math.cos(midAngle) * explosionOffset;
-        const offsetY = Math.sin(midAngle) * explosionOffset;
+        const offsetX = Math.cos(midAngle) * currentOffset;
+        const offsetY = Math.sin(midAngle) * currentOffset;
 
         ctx.save();
         
-        if (isCut) {
+        if (currentOffset > 0) {
             ctx.translate(offsetX, offsetY);
         }
 
@@ -115,7 +180,7 @@ function draw() {
 
         ctx.drawImage(textureCanvas, 0, 0, size, size);
 
-        if (isCut) {
+        if (currentOffset > 0) {
             ctx.lineWidth = 1;
             ctx.strokeStyle = 'rgba(255,255,255,0.3)';
             ctx.stroke();
@@ -124,7 +189,7 @@ function draw() {
         ctx.restore();
     }
 
-    if (!isCut) {
+    if (!isCut && explosionOffset === 0) {
         drawCutGuides(centerX, centerY, radius, slices);
     }
 }
@@ -198,6 +263,200 @@ function drawCutGuides(cx, cy, r, slices) {
     }
     ctx.restore();
 }
+
+function easeOutBack(x) {
+    const c1 = 1.70158;
+    const c3 = c1 + 1;
+    return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+}
+
+function animateSeparation() {
+    const startTime = Date.now();
+    const duration = 800;
+    const targetOffset = 25;
+
+    function loop() {
+        const now = Date.now();
+        const elapsed = now - startTime;
+        let progress = elapsed / duration;
+
+        if (progress > 1) progress = 1;
+
+        const easedProgress = easeOutBack(progress);
+        explosionOffset = easedProgress * targetOffset;
+
+        draw();
+
+        if (progress < 1) {
+            requestAnimationFrame(loop);
+        }
+    }
+    loop();
+}
+
+function updateCutInfo() {
+    const slices = parseInt(slicesInput.value);
+    const isEven = slices % 2 === 0;
+    const cuts = isEven ? slices / 2 : slices;
+    
+    sliceValueDisplay.textContent = slices;
+    cutCountDisplay.textContent = cuts;
+    
+    if (isCut) {
+        isCut = false;
+        explosionOffset = 0;
+        crumbs = [];
+        
+        // Reset Text with Translation
+        const t = translations[currentLang];
+        const btnText = cutBtn.querySelector('.btn-text');
+        if(btnText) btnText.textContent = t.cut_action;
+        
+        cutBtn.classList.remove('reset');
+        
+        const btnContent = cutBtn.querySelector('.btn-content');
+        if(btnContent) {
+             // Keep icon
+             const icon = btnContent.querySelector('i');
+             icon.className = 'fas fa-cut';
+        }
+    }
+    draw();
+}
+
+async function performCutAnimation() {
+    if (isAnimating) return;
+    
+    const t = translations[currentLang];
+
+    if (isCut) {
+        isCut = false;
+        explosionOffset = 0;
+        crumbs = [];
+        
+        const btnText = cutBtn.querySelector('.btn-text');
+        if(btnText) btnText.textContent = t.cut_action;
+        
+        const icon = cutBtn.querySelector('i');
+        if(icon) icon.className = 'fas fa-cut';
+        
+        cutBtn.classList.remove('reset');
+        draw();
+        return;
+    }
+
+    isAnimating = true;
+    const slices = parseInt(slicesInput.value);
+    const isEven = slices % 2 === 0;
+    const cuts = isEven ? slices / 2 : slices;
+    const angleStep = (2 * Math.PI) / slices;
+    
+    const size = canvas.width / (window.devicePixelRatio || 1);
+
+    cutter.classList.add('active');
+
+    for (let i = 0; i < cuts; i++) {
+        const angle = i * angleStep - Math.PI / 2;
+        
+        let startX, startY, endX, endY, duration;
+
+        if (isEven) {
+            startX = 50 + (Math.cos(angle) * 45);
+            startY = 50 + (Math.sin(angle) * 45);
+            endX = 50 + (Math.cos(angle + Math.PI) * 45);
+            endY = 50 + (Math.sin(angle + Math.PI) * 45);
+            duration = 400;
+        } else {
+            startX = 50;
+            startY = 50;
+            endX = 50 + (Math.cos(angle) * 45);
+            endY = 50 + (Math.sin(angle) * 45);
+            duration = 300;
+        }
+
+        const moveAngle = Math.atan2(endY - startY, endX - startX);
+        const rotationDeg = moveAngle * (180 / Math.PI);
+        
+        cutter.style.transform = `translate(-50%, -50%) rotate(${rotationDeg}deg)`;
+
+        cutter.style.transition = 'none';
+        cutter.style.left = `${startX}%`;
+        cutter.style.top = `${startY}%`;
+        
+        await new Promise(r => setTimeout(r, 50));
+
+        cutter.style.transition = `left ${duration}ms linear, top ${duration}ms linear`;
+        cutter.style.left = `${endX}%`;
+        cutter.style.top = `${endY}%`;
+
+        const startTime = Date.now();
+        const crumbInterval = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            if (elapsed >= duration) {
+                clearInterval(crumbInterval);
+                return;
+            }
+            const progress = elapsed / duration;
+            const currentPctX = startX + (endX - startX) * progress;
+            const currentPctY = startY + (endY - startY) * progress;
+            const pixelX = (currentPctX / 100) * size;
+            const pixelY = (currentPctY / 100) * size;
+            
+            spawnCrumbs(pixelX, pixelY);
+            draw();
+        }, 30);
+        
+        await new Promise(r => setTimeout(r, duration));
+        clearInterval(crumbInterval);
+    }
+
+    cutter.classList.remove('active');
+    isAnimating = false;
+    isCut = true;
+    
+    animateSeparation();
+    
+    const btnText = cutBtn.querySelector('.btn-text');
+    if(btnText) btnText.textContent = t.reset_action;
+    
+    const icon = cutBtn.querySelector('i');
+    if(icon) icon.className = 'fas fa-undo';
+    
+    cutBtn.classList.add('reset');
+}
+
+slicesInput.addEventListener('input', updateCutInfo);
+
+typeButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+        typeButtons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentType = btn.dataset.type;
+        
+        isCut = false;
+        explosionOffset = 0;
+        crumbs = [];
+        
+        const t = translations[currentLang];
+        const btnText = cutBtn.querySelector('.btn-text');
+        if(btnText) btnText.textContent = t.cut_action;
+        
+        const icon = cutBtn.querySelector('i');
+        if(icon) icon.className = 'fas fa-cut';
+        
+        cutBtn.classList.remove('reset');
+        
+        draw();
+    });
+});
+
+cutBtn.addEventListener('click', performCutAnimation);
+window.addEventListener('resize', resizeCanvas);
+
+// Init
+applyTranslations(); // Apply languages first
+updateCutInfo();
+resizeCanvas();
 
 // --- GÉNÉRATEURS DE TEXTURE ---
 function generatePizzaTexture(ctx, cx, cy, r) {
@@ -296,133 +555,3 @@ function generateTarteTexture(ctx, cx, cy, r) {
     ctx.fillStyle = 'rgba(255, 200, 200, 0.15)'; ctx.beginPath(); ctx.arc(cx, cy, r - 10, 0, Math.PI*2); ctx.fill();
     ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'; ctx.beginPath(); ctx.ellipse(cx - r*0.4, cy - r*0.4, 30, 15, Math.PI/4, 0, Math.PI*2); ctx.fill();
 }
-
-// --- Animation & Events ---
-
-function updateCutInfo() {
-    const slices = parseInt(slicesInput.value);
-    const isEven = slices % 2 === 0;
-    const cuts = isEven ? slices / 2 : slices;
-    
-    sliceValueDisplay.textContent = slices;
-    cutCountDisplay.textContent = cuts;
-    
-    if (isCut) {
-        isCut = false;
-        crumbs = [];
-        cutBtn.textContent = "COUPER MAINTENANT";
-        cutBtn.classList.remove('reset');
-    }
-    draw();
-}
-
-async function performCutAnimation() {
-    if (isAnimating) return;
-    
-    if (isCut) {
-        isCut = false;
-        crumbs = [];
-        cutBtn.textContent = "COUPER MAINTENANT";
-        cutBtn.classList.remove('reset');
-        draw();
-        return;
-    }
-
-    isAnimating = true;
-    const slices = parseInt(slicesInput.value);
-    const isEven = slices % 2 === 0;
-    const cuts = isEven ? slices / 2 : slices;
-    const angleStep = (2 * Math.PI) / slices;
-    
-    const size = canvas.width / (window.devicePixelRatio || 1);
-
-    cutter.classList.add('active');
-
-    for (let i = 0; i < cuts; i++) {
-        const angle = i * angleStep - Math.PI / 2;
-        
-        let startX, startY, endX, endY, duration;
-
-        if (isEven) {
-            startX = 50 + (Math.cos(angle) * 45);
-            startY = 50 + (Math.sin(angle) * 45);
-            endX = 50 + (Math.cos(angle + Math.PI) * 45);
-            endY = 50 + (Math.sin(angle + Math.PI) * 45);
-            duration = 400;
-        } else {
-            startX = 50;
-            startY = 50;
-            endX = 50 + (Math.cos(angle) * 45);
-            endY = 50 + (Math.sin(angle) * 45);
-            duration = 300;
-        }
-
-        const moveAngle = Math.atan2(endY - startY, endX - startX);
-        const rotationDeg = moveAngle * (180 / Math.PI);
-        
-        cutter.style.transform = `translate(-50%, -50%) rotate(${rotationDeg}deg)`;
-
-        cutter.style.transition = 'none';
-        cutter.style.left = `${startX}%`;
-        cutter.style.top = `${startY}%`;
-        
-        await new Promise(r => setTimeout(r, 50));
-
-        cutter.style.transition = `left ${duration}ms linear, top ${duration}ms linear`;
-        cutter.style.left = `${endX}%`;
-        cutter.style.top = `${endY}%`;
-
-        const startTime = Date.now();
-        const crumbInterval = setInterval(() => {
-            const elapsed = Date.now() - startTime;
-            if (elapsed >= duration) {
-                clearInterval(crumbInterval);
-                return;
-            }
-            const progress = elapsed / duration;
-            const currentPctX = startX + (endX - startX) * progress;
-            const currentPctY = startY + (endY - startY) * progress;
-            const pixelX = (currentPctX / 100) * size;
-            const pixelY = (currentPctY / 100) * size;
-            
-            spawnCrumbs(pixelX, pixelY);
-            draw();
-        }, 30);
-        
-        await new Promise(r => setTimeout(r, duration));
-        clearInterval(crumbInterval);
-    }
-
-    cutter.classList.remove('active');
-    isAnimating = false;
-    isCut = true;
-    
-    cutBtn.textContent = "RÉINITIALISER";
-    cutBtn.classList.add('reset');
-    
-    draw();
-}
-
-slicesInput.addEventListener('input', updateCutInfo);
-
-typeButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-        typeButtons.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        currentType = btn.dataset.type;
-        
-        isCut = false;
-        crumbs = [];
-        cutBtn.textContent = "COUPER MAINTENANT";
-        cutBtn.classList.remove('reset');
-        
-        draw();
-    });
-});
-
-cutBtn.addEventListener('click', performCutAnimation);
-window.addEventListener('resize', resizeCanvas);
-
-// Init
-updateCutInfo();
-resizeCanvas();
